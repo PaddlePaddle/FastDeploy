@@ -180,6 +180,7 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"][idx : idx + 1] = 0
             self.model_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.model_inputs["stop_flags"][idx : idx + 1] = False
+            self.model_inputs["batch_drop"][idx : idx + 1] = False
 
             self.model_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
@@ -502,6 +503,7 @@ class MTPProposer(Proposer):
             # Reset last sequence lengths if applicable
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self.model_inputs, "last_seq_lens_this_time", -1)
+                fill_paddle_tensor(self.model_inputs, "last_seq_lens_encoder", -1)
 
             # Reset input IDs length
             fill_paddle_tensor(self.model_inputs, "input_ids_len", 0)
@@ -667,6 +669,9 @@ class MTPProposer(Proposer):
         if self.num_model_steps > 1:
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
+            )
+            self.last_seq_lens_encoder = paddle.full_like(
+                self.target_model_inputs["seq_lens_encoder"], fill_value=-1, dtype="int32"
             )
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
         self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
@@ -970,8 +975,8 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
             self.model_inputs["not_need_stop"],
-            self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
+            self.model_inputs["batch_drop"],
             self.model_inputs["pre_ids"],
             self.model_inputs["mask_rollback"],
             self.model_inputs["recompute_token_num"],
@@ -1004,7 +1009,7 @@ class MTPProposer(Proposer):
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
-    def _post_process(self, sampled_token_ids):
+    def _post_process(self, sampled_token_ids, is_dummy_run=False):
         """
         PostProcess for generation
         """
@@ -1018,12 +1023,15 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"],
             self.model_inputs["output_cum_offsets"],
             self.model_inputs["stop_flags"],
+            self.model_inputs["batch_drop"],
             self.model_inputs["not_need_stop"],
             self.model_inputs["max_dec_len"],
             self.model_inputs["eos_token_id"],
             self.model_inputs["base_model_draft_tokens"],
+            self.model_inputs["prompt_lens"],
             self.max_model_len,
             self.model_inputs["substep"],
+            is_dummy_run,
         )
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
             skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
@@ -1131,7 +1139,7 @@ class MTPProposer(Proposer):
                 # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
                     self.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
-
+                    self.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
@@ -1206,7 +1214,7 @@ class MTPProposer(Proposer):
                         group=self.parallel_config.tp_group,
                     )
 
-                self._post_process(sampled_token_ids)
+                self._post_process(sampled_token_ids, is_dummy_run)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
@@ -1296,7 +1304,7 @@ class MTPProposer(Proposer):
                         group=self.parallel_config.tp_group,
                     )
 
-                self._post_process(sampled_token_ids)
+                self._post_process(sampled_token_ids, is_dummy_run)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
@@ -1306,6 +1314,7 @@ class MTPProposer(Proposer):
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
+            self.last_seq_lens_encoder,
             self.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
@@ -1341,7 +1350,7 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"][idx : idx + 1] = 0
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
 
-    def _update_status(self):
+    def _update_status(self, is_dummy_run: bool = False):
         """
         Update main-model's forward info in next step.
         Allocate/Free block of MPT.
@@ -1351,6 +1360,8 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_this_time"],
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
+            self.model_inputs["batch_drop"],
+            is_dummy_run,
         )
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             mtp_step_paddle(
@@ -1399,7 +1410,7 @@ class MTPProposer(Proposer):
         """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
         self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
-        self._update_status()
+        self._update_status(is_dummy_run)
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
 

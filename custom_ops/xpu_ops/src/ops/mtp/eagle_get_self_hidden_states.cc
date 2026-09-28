@@ -23,6 +23,7 @@
 namespace api = baidu::xpu::api;
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx) {
@@ -102,7 +103,10 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
 }
 
 PD_BUILD_STATIC_OP(eagle_get_self_hidden_states)
-    .Inputs(
-        {"input", "last_seq_lens_this_time", "seq_lens_this_time", "step_idx"})
+    .Inputs({"input",
+             "last_seq_lens_encoder",
+             "last_seq_lens_this_time",
+             "seq_lens_this_time",
+             "step_idx"})
     .Outputs({"out"})
     .SetKernelFn(PD_KERNEL(EagleGetSelfHiddenStates));
