@@ -212,7 +212,7 @@ scheduler:
   policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, remote_cache_aware, fd_metrics_score, fd_remote_metrics_score; 默认: request_num
   prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略; 默认: process_tokens
   decode-policy: "request_num" # pd分离模式下decode节点调度策略; 默认: request_num
-  eviction-interval-secs: 60 # cache-aware策略清理过期cache的间隔时间
+  eviction-interval-secs: 60 # cache-aware策略清理过期计数器的间隔时间
   eviction-duration-mins: 30 # cache-aware策略radix tree节点驱逐时间(分钟); 默认: 30
   balance-abs-threshold: 1 # cache-aware策略绝对阈值
   balance-rel-threshold: 0.2 # cache-aware策略相对阈值

@@ -1,0 +1,18 @@
+[
+  {"query": "帮我统计一下 router 的 cache 命中率，日志在 logs/fd-router.log", "should_trigger": true},
+  {"query": "我想看看 cache-aware 调度的效果怎么样，hitRatio 数据是多少", "should_trigger": true},
+  {"query": "prefix hit ratio 和 session hit rate 分别是多少？分析一下 logs/router.log", "should_trigger": true},
+  {"query": "看一下最近30分钟的缓存预热情况，用 tail 模式快速扫一下", "should_trigger": true},
+  {"query": "我刚部署了新的 cache-aware 策略，帮我跑一下 /stat-cache-hitrate 看看效果", "should_trigger": true},
+  {"query": "每个 prefill worker 的缓存利用率排名是怎样的？哪个 worker 命中率最高", "should_trigger": true},
+  {"query": "stat cache hitrate on our go router log, need to check the KV cache reuse rate", "should_trigger": true},
+  {"query": "持续监控 cache 命中率变化趋势，我想看实时数据", "should_trigger": true},
+  {"query": "router 最近老是返回 502，帮我排查一下什么问题", "should_trigger": false},
+  {"query": "分析一下 router 的请求延迟，p99 是不是太高了", "should_trigger": false},
+  {"query": "帮我 trace 一下这个请求 ID: abc-123-def，看看整个链路", "should_trigger": false},
+  {"query": "Worker 健康状态怎么样？有没有频繁下线的", "should_trigger": false},
+  {"query": "帮我写一个 Go 语言的 HTTP 路由框架", "should_trigger": false},
+  {"query": "分析一下 nginx 的 access log，统计各个 URL 的访问量", "should_trigger": false},
+  {"query": "router 负载不均衡，某些 worker 的 running 计数异常高", "should_trigger": false},
+  {"query": "帮我看看 FastDeploy 的部署文档，我想部署一个新模型", "should_trigger": false}
+]

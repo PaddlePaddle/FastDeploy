@@ -29,6 +29,24 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `empty baseURL provided` | Health check received an empty base URL | Health check cannot be performed | Registration parameters |
 | `failed to create request: {error}` | Failed to create health check request | The instance may be marked as unhealthy | Network environment |
 | `failed to read response body: {error}` | Failed to read health check response body | The instance may be marked as unhealthy | Backend instance status |
+| `Failed to select mixed worker: {error}` | Failed to select Mixed worker in centralized mode | Current request returns 502 | Health status, scheduling strategy |
+| `Failed to select prefill worker: {error}` | Failed to select Prefill worker in PD disaggregated mode | Current request returns 502 | Health status, scheduling strategy |
+| `Failed to read register request body: {error}` | Failed to read registration request body | Registration request returns 400 | Request format |
+| `Failed to unmarshal register request JSON: {error}` | Failed to parse registration request JSON | Registration request returns 400 | Request format |
+| `Failed to create decode request for {url}: {error}` | Failed to create HTTP request to Decode instance | Current request fails | Network environment |
+| `Failed to create prefill request for {url}: {error}` | Failed to create HTTP request to Prefill instance | Current request fails | Network environment |
+| `Decode request failed for {url}: {error}` | Request to Decode instance failed | Current request fails | Backend instance status, network connectivity |
+| `Prefill request failed for {url}: {error}` | Request to Prefill instance failed | Current request fails | Backend instance status, network connectivity |
+| `Failed to read request body: {error}` | Failed to read inference request body | Current request returns 400 | Request format |
+| `Failed to unmarshal request JSON: {error}` | Failed to parse inference request JSON | Current request returns 400 | Request format |
+| `Failed to select worker pair: {error}` | Failed to select worker pair in PD disaggregated mode | Current request returns 502 | Health status, scheduling strategy |
+| `Failed to build disaggregate_info: {error}` | Failed to build PD disaggregation communication info | Current request returns 500 | Registration parameters (connector_port, device_ids, etc.) |
+| `Failed to encode modified request: {error}` | Failed to encode modified request body | Current request returns 500 | Request content |
+| `Failed to select worker: {error}` | Failed to select worker in centralized mode | Current request returns 502 | Health status, scheduling strategy |
+| `Failed to connect to backend service: {error}` | Failed to connect to backend inference instance (after 3 retries) | Current request returns 502 | Backend instance status, network connectivity |
+| `Request failed (attempt {n}/{max}): {error}` | Request attempt {n} failed | If retries exhausted, request returns 502 | Backend instance status, network connectivity |
+| `Failed to create backend request for {url}: {error}` | Failed to create HTTP request to backend | Current request fails | Network environment |
+| `Backend request failed for {url}: {error}` | Request to backend instance failed | Current request fails | Backend instance status, network connectivity |
 
 ### Warn-Level Logs
 
@@ -37,8 +55,9 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `Server {url} is not healthy` | The instance at this URL failed health check | Router cannot register the instance, or will remove it from the registered list | Health status |
 | `Instance {url} role is unknown` | Instance role cannot be recognized | The instance will not be added to the scheduling list | Registration parameters |
 | `cache-aware prefill: tokenizer failed, fallback to char tokens: {error}` | Tokenizer service call failed, automatically falling back to character-based tokenization | cache_aware strategy remains active, using character-based tokenization for cache matching instead of the Tokenizer; normal request processing is not affected | Tokenizer service status |
-| `cache-aware prefill: tokenize failed, fallback to process_tokens: {error}` | Tokenization completely failed (e.g., empty input), falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected | Request content, Tokenizer service status |
-| `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` | Tokenization failed (new format), falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected | Request content, Tokenizer service status |
+| `GetRemoteMetrics failed for {url}, falling back to local counter: {error}` | Failed to fetch remote metrics, falling back to local counter | Scheduling accuracy may decrease; normal request processing is not affected | Backend instance metrics port, network connectivity |
+| `release worker: {url} skipped, counter already cleaned up` | Worker counter was already cleaned up when trying to release | May occur when a worker is removed by health check while requests are still in-flight | Health status, request timing |
+| `release worker: {url} skipped, counter already zero (possible double-release)` | Worker counter is already zero when trying to release | Possible duplicate counter release | Request processing logic |
 
 ### Info-Level Logs
 
@@ -49,7 +68,6 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `Successfully registered instance from index {index}` | Instance from config file registered successfully | Normal startup log |
 | `No instances found in config file {path}` | No instances found in the registration config file | Check whether register.yaml is empty |
 | `Request completed successfully.` | Request processing completed | Normal operation log |
-| `Request failed, retrying...` | Request failed, retrying | Router will retry up to 3 times |
 | `select worker (prefill): {url}, tokens: {tokens}` | Prefill scheduler selected a worker, showing current token processing count | Normal operation log |
 | `select worker ({type}): {url}, count: {count}` | Decode/Mixed scheduler selected a worker, showing current request concurrency | Normal operation log |
 | `release worker: {url}, count: {count}` | Request ended, worker counter released | Normal operation log |
@@ -58,7 +76,6 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `removed counters for {count} unhealthy workers: {urls}` | Batch cleanup of counters for unhealthy workers | Normal operation log |
 | `[stats] total_running={n}, workers: [{loads}], cache_hit_rate={rate}% (hits={hits}/total={total})` | Periodic stats: total requests, worker loads, cache hit rate | Normal operation log, useful for monitoring and tuning |
 | `Parsing completed; starting worker selection.` | Request parsing completed, starting worker selection | Normal operation log |
-| `Request completed with an error.` | Request processing completed with an error | Check backend instance status |
 | `[SelectWorkerPair] decode selection failed, releasing prefill counter url={url}` | Decode selection failed in PD disaggregated mode, releasing Prefill counter | Error handling log |
 | `[prefill] first chunk received, release counter url={url}` | Prefill streaming response received first chunk, counter released | Normal operation log |
 | `[prefill] non-stream prefill response done, release counter url={url}` | Prefill non-streaming response completed, counter released | Normal operation log |
@@ -66,12 +83,17 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `[prefill] release in defer (fallback) url={url}, isStream={bool}` | Fallback resource release when Prefill request exits abnormally | Error handling log |
 | `[prefill] release in CommonCompletions defer (error path) url={url}` | Prefill resource release on error path | Error handling log |
 | `cache-aware prefill: final strategy: process_tokens, reason: strategy not initialized` | cache_aware strategy not initialized, falling back to process_tokens | Check cache_aware configuration |
+| `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` | Tokenization failed, falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected |
 | `cache-aware prefill: final strategy: process_tokens, reason: load imbalanced, loads={loads}. ts_ms={ts}` | Load imbalanced across instances, falling back to process_tokens strategy | Normal operation log, automatic load balancing switch |
 | `cache-aware prefill: final strategy: cache_aware_scoring, selected={url}, loads={loads}, hitRatios={ratios}. ts_ms={ts}` | cache_aware scoring strategy selected a worker | Normal operation log, showing loads and hit ratios |
 | `[{method}] {path} {proto} {status} {latency} {clientIP}` | HTTP request access log | Normal operation log, records basic info for each request |
 | `before SelectWorker prefill. ts_ms={ts}` | Starting Prefill worker selection in PD disaggregated mode | Normal operation log, for performance tracing |
 | `before SelectWorker decode, after prefill. ts_ms={ts}` | Starting Decode worker selection after Prefill selection | Normal operation log, for performance tracing |
 | `after SelectWorker decode, before return. ts_ms={ts}` | Decode worker selection completed | Normal operation log, for performance tracing |
+| `unhealthy worker counter preserved (inflight requests): {url}, count: {count}` | Unhealthy worker still has in-flight requests, counter temporarily preserved | Normal operation log, will be auto-cleaned after in-flight requests complete |
+| `unhealthy worker token counter preserved (inflight requests): {url}, tokens: {tokens}` | Unhealthy worker still has in-flight token load, token counter temporarily preserved | Normal operation log, will be auto-cleaned after in-flight requests complete |
+| `cleanup unhealthy worker token counter: {url}` | Cleaned up token counter for unhealthy worker | Normal operation log |
+| `preserved counters for {count} workers with inflight requests: {urls}` | Batch preserved counters for workers with in-flight requests | Normal operation log |
 
 ### Debug-Level Logs
 
@@ -100,6 +122,10 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `{"error": "Failed to build disaggregate_info"}` | 500 | Failed to build PD disaggregation communication info | Registration parameters (connector_port, device_ids, etc.) |
 | `{"error": "Invalid request body"}` | 400 | Failed to read request body | Request format |
 | `{"error": "Invalid JSON format"}` | 400 | Failed to parse request body JSON | Request format |
+| `{"error": "Failed to encode modified request: {error}"}` | 500 | Failed to encode modified request body | Request content |
+| `{"code": 500, "msg": "Internal server error"}` | 500 | A panic occurred during request processing and was recovered | Backend instance status, request content |
+
+> **Note**: In PD disaggregated (splitwise) mode, the above error responses include an additional `request_id` field, e.g., `{"error": "...", "request_id": "xxx"}`. Additionally, `Invalid request body` and `Invalid JSON format` responses include specific error details, e.g., `{"error": "Invalid request body: EOF"}`.
 
 ### Registration Request Errors (/register)
 
@@ -111,6 +137,7 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `{"code": 400, "msg": "splitwise mode only supports PREFILL/DECODE instances"}` | 400 | MIXED instances are not allowed in PD disaggregated mode | Deployment mode, instance role |
 | `{"code": 400, "msg": "only MIXED instances are allowed"}` | 400 | Only MIXED instances are allowed in centralized mode | Deployment mode, instance role |
 | `{"code": 400, "msg": "invalid InstanceInfo format: {error}"}` | 400 | Instance registration info validation failed | Registration parameters |
+| `{"code": 400, "msg": "DefaultManager is nil"}` | 400 | Router internal manager not initialized | Router startup status |
 | `{"code": 200, "msg": "Register success"}` | 200 | Registration successful | — |
 
 ### Common Registration Parameter Validation Errors
@@ -124,6 +151,10 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `port is required` | Missing port field | Add the port field |
 | `invalid port: {port}` | port is not a valid port number | Provide a port number in the range 1-65535 |
 | `invalid protocol: {protocol}` | Invalid transfer protocol | Use a valid protocol value: ipc / rdma |
+| `invalid connector_port: {port}` | connector_port is not a valid port number | Provide a port number in the range 1-65535 |
+| `invalid engine_worker_queue_port: {port}` | engine_worker_queue_port is not a valid port number | Provide a port number in the range 1-65535 |
+| `invalid metrics_port: {port}` | metrics_port is not a valid port number | Provide a port number in the range 1-65535 |
+| `rdma_ports[{index}] invalid port: {port}` | Port at index {index} in RDMA ports list is not valid | Provide a port number in the range 1-65535 |
 
 ## Troubleshooting Guide
 
@@ -236,7 +267,7 @@ If `Failed to start server` appears in startup logs, check:
 When using the `cache_aware` scheduling strategy, the Router calls a Tokenizer service to tokenize requests for cache hit ratio computation. When the Tokenizer service is unavailable, the Router has a two-level degradation mechanism:
 
 1. **Fallback to character-based tokenization** (common case): The log will show `tokenizer failed, fallback to char tokens`. The cache_aware strategy remains active, using character-based tokenization for cache matching instead of the Tokenizer. Cache hit accuracy may decrease, but normal request processing is not affected.
-2. **Fallback to process_tokens strategy** (extreme case): When tokenization completely fails (e.g., empty request content), the log will show `tokenize failed, fallback to process_tokens`. The cache_aware strategy temporarily becomes inactive, and scheduling falls back to token processing volume. Normal request processing is not affected.
+2. **Fallback to process_tokens strategy** (extreme case): When tokenization completely fails (e.g., empty request content), the log will show `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` (Info level). The cache_aware strategy temporarily becomes inactive, and scheduling falls back to token processing volume. Normal request processing is not affected.
 
 To restore full cache_aware functionality:
 

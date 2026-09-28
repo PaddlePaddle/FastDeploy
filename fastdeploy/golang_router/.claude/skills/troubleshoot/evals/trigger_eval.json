@@ -1,0 +1,18 @@
+[
+  {"query": "router 最近频繁 502 和 503，帮我全面排查一下问题", "should_trigger": true},
+  {"query": "帮我 troubleshoot 一下 Go Router，感觉有些请求延迟特别高", "should_trigger": true},
+  {"query": "分析 logs/fd-router.log 里面的错误日志，看看哪些错误最多", "should_trigger": true},
+  {"query": "有几个 Worker 好像不太健康，帮我看看 Worker 健康时间线", "should_trigger": true},
+  {"query": "cache 调度策略最近好像有问题，fallback 比例太高了，诊断一下", "should_trigger": true},
+  {"query": "帮我追踪请求 trace-id-12345，看看这个请求在 router 里经历了什么", "should_trigger": true},
+  {"query": "/troubleshoot 全量扫描 router 日志，给我一份完整的诊断报告", "should_trigger": true},
+  {"query": "router 负载分析一下，有没有 counter 异常或者 double-release 的情况", "should_trigger": true},
+  {"query": "统计一下 cache 命中率是多少，prefix hit ratio 和 session hit rate 各是多少", "should_trigger": false},
+  {"query": "帮我看看 hitRatio 数据，想了解 KV cache 的复用度", "should_trigger": false},
+  {"query": "帮我写一个 Go 的 reverse proxy，要支持负载均衡", "should_trigger": false},
+  {"query": "分析 Kubernetes pod 的日志，看看为什么 OOMKilled", "should_trigger": false},
+  {"query": "FastDeploy 模型部署失败了，帮我看看怎么回事", "should_trigger": false},
+  {"query": "帮我优化一下 Python 代码的性能，跑得太慢了", "should_trigger": false},
+  {"query": "nginx 返回 504 Gateway Timeout，帮我排查原因", "should_trigger": false},
+  {"query": "帮我监控 cache 命中率的实时变化趋势", "should_trigger": false}
+]

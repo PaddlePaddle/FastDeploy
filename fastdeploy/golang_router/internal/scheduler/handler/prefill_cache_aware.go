@@ -384,6 +384,9 @@ func (c *radixPrefixCache) Record(tokens []int, worker string) {
 
 // evictionWorker periodically evicts inactive nodes
 func (c *radixPrefixCache) evictionWorker(interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
