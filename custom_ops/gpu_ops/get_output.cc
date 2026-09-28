@@ -17,6 +17,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "custom_ftok.h"
 #include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
@@ -25,6 +26,7 @@
 
 #define MAX_BSZ 512
 // #define GET_OUTPUT_DEBUG
+
 struct msgdata {
   long mtype;
   int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
@@ -49,7 +51,7 @@ void GetOutput(const paddle::Tensor& x,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
 #ifdef GET_OUTPUT_DEBUG
