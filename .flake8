@@ -5,3 +5,4 @@ max-line-length = 119
 # E402: module level import not at top of file
 per-file-ignores =
     __init__.py:F401,F403,E402
+    fastdeploy/model_executor/layers/sample/ops/top_k_top_p_triton.py:E241,E121,E131,E266
