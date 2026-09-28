@@ -80,7 +80,7 @@ class MooncakeStoreConfig:
             rdma_devices = config.get("rdma_devices", "")
             master_server_addr = config.get("master_server_addr")
 
-        if rdma_devices == "" and current_platform.is_cuda():
+        if rdma_devices == "" and (current_platform.is_cuda() or current_platform.is_xpu()):
             # FIXME: use auto-select NICs in MooncakeStore will raise error and roll back to using TCP
             rdma_devices = get_rdma_nics()
             logger.info(f"No RDMA devices specified, defaulting to all available devices: {rdma_devices}")
