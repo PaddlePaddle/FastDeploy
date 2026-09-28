@@ -262,6 +262,15 @@ class ModelConfig:
         if not hasattr(self, "v_head_dim"):
             self.v_head_dim = self.head_dim
 
+        # Extract partial_rotary_factor from rope_parameters if not already set (e.g. Qwen3.5)
+        if (
+            self.partial_rotary_factor == 1.0
+            and hasattr(self, "rope_parameters")
+            and isinstance(self.rope_parameters, dict)
+        ):
+            if "partial_rotary_factor" in self.rope_parameters:
+                self.partial_rotary_factor = float(self.rope_parameters["partial_rotary_factor"])
+
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
