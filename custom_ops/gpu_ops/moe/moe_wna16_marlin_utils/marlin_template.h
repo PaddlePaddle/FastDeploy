@@ -1,3 +1,4 @@
+#pragma once
 /*
  * Modified by Neural Magic
  * Copyright (C) Marlin.2024 Elias Frantar
@@ -23,9 +24,9 @@
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 
+#include "moe/moe_wna16_marlin_utils/dequant.h"
 #include "moe/moe_wna16_marlin_utils/marlin.cuh"
 #include "moe/moe_wna16_marlin_utils/marlin_dtypes.cuh"
-#include "moe/moe_wna16_marlin_utils/dequant.h"
 #include "moe/moe_wna16_marlin_utils/types.h"
 
 #define STATIC_ASSERT_SCALAR_TYPE_VALID(scalar_t)               \
