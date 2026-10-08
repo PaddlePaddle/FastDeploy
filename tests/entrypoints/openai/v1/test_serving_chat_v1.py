@@ -195,6 +195,66 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(result)
 
+    def test_build_logprobs_response_skips_decoding_when_disabled(self):
+        """include_logprobs_decode_token=False must empty token and bytes.
+
+        The legacy servicer has gated detokenization on this switch since it was
+        introduced; the /v1 copy did not, so the client-facing field silently did
+        nothing on the async path and the caller still paid the full
+        per-candidate-token detokenization cost it had opted out of.
+        """
+        response_logprobs = LogprobsLists(
+            logprob_token_ids=[[1, 2, 3]], logprobs=[[0.1, 0.2, 0.3]], sampled_token_ranks=[[0, 1, 2]]
+        )
+
+        result = self.serving_chat._build_logprobs_response(
+            request_logprobs=True,
+            response_logprobs=response_logprobs,
+            request_top_logprobs=5,
+            request_decode_flag=False,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.content[0].token, "")
+        self.assertEqual(list(result.content[0].bytes), [])
+        for entry in result.content[0].top_logprobs:
+            self.assertEqual(entry.token, "")
+            self.assertEqual(list(entry.bytes), [])
+        self.assertFalse(self.mock_engine_client.data_processor.process_logprob_response.called)
+
+    def test_build_logprobs_response_decodes_by_default(self):
+        """The default keeps decoding, so existing callers are unaffected."""
+        response_logprobs = LogprobsLists(
+            logprob_token_ids=[[1, 2, 3]], logprobs=[[0.1, 0.2, 0.3]], sampled_token_ranks=[[0, 1, 2]]
+        )
+
+        result = self.serving_chat._build_logprobs_response(
+            request_logprobs=True, response_logprobs=response_logprobs, request_top_logprobs=5
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.content[0].token, "test_token")
+        self.assertTrue(self.mock_engine_client.data_processor.process_logprob_response.called)
+
+    def test_create_chat_logprobs_forwards_the_decode_flag(self):
+        """_create_chat_logprobs must pass the switch down to the builder."""
+        output_top_logprobs = [
+            [[1, 2, 3]],  # logprob_token_ids
+            [[0.1, 0.2, 0.3]],  # logprobs
+            [[0, 1, 2]],  # sampled_token_ranks
+        ]
+
+        result = self.serving_chat._create_chat_logprobs(
+            output_top_logprobs=output_top_logprobs,
+            request_logprobs=5,
+            request_top_logprobs=5,
+            request_decode_flag=False,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.content[0].token, "")
+        self.assertFalse(self.mock_engine_client.data_processor.process_logprob_response.called)
+
     def test_build_logprobs_response_with_unicode_replacement(self):
         """Test _build_logprobs_response with unicode replacement characters."""
         # Mock the data processor to return unicode replacement character

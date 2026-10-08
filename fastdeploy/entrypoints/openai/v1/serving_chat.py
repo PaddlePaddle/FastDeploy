@@ -105,6 +105,7 @@ class OpenAIServingChat(OpenAiServingBase):
         output_top_logprobs,
         request_logprobs: Optional[bool] = None,
         request_top_logprobs: Optional[int] = None,
+        request_decode_flag: Optional[bool] = True,
     ) -> Optional[LogProbs]:
         """Create OpenAI-style logprobs for chat completions."""
         if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
@@ -122,6 +123,7 @@ class OpenAIServingChat(OpenAiServingBase):
                 request_logprobs=request_logprobs,
                 response_logprobs=top_logprobs,
                 request_top_logprobs=request_top_logprobs,
+                request_decode_flag=request_decode_flag,
             )
             if logprobs_res is None or logprobs_res.content is None:
                 logprobs_res = step_logprobs_res
@@ -134,6 +136,7 @@ class OpenAIServingChat(OpenAiServingBase):
         request_logprobs: Optional[bool],
         response_logprobs: Optional[LogprobsLists],
         request_top_logprobs: Optional[int],
+        request_decode_flag: Optional[bool] = True,
     ) -> Optional[LogProbs]:
         """
         Construct a logprobs response object in line with the OpenAI style.
@@ -163,12 +166,16 @@ class OpenAIServingChat(OpenAiServingBase):
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
             for tid, lp in zip(topk_token_ids, topk_logprobs):
-                token_str = self.engine_client.data_processor.process_logprob_response(
-                    [tid], clean_up_tokenization_spaces=False
-                )
-                token_bytes = token_str.encode("utf-8", errors="replace")
-                if "\ufffd" in token_str:
-                    token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                if request_decode_flag:
+                    token_str = self.engine_client.data_processor.process_logprob_response(
+                        [tid], clean_up_tokenization_spaces=False
+                    )
+                    token_bytes = token_str.encode("utf-8", errors="replace")
+                    if "\ufffd" in token_str:
+                        token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                else:
+                    token_str = ""
+                    token_bytes = []
                 entry = LogProbEntry(token=token_str, logprob=lp, bytes=list(token_bytes))
                 top_logprob_entries.append(entry)
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
@@ -293,10 +300,15 @@ class OpenAIServingChat(OpenAiServingBase):
         choice.delta.tool_calls = [output.tool_calls] if output.tool_calls else None
 
         if request.logprobs and output.top_logprobs is not None:
-            choice.logprobs = self._create_chat_logprobs(output.top_logprobs, request.logprobs, request.top_logprobs)
+            choice.logprobs = self._create_chat_logprobs(
+                output.top_logprobs, request.logprobs, request.top_logprobs, request.include_logprobs_decode_token
+            )
             if request.include_draft_logprobs and output.draft_top_logprobs is not None:
                 choice.draft_logprobs = self._create_chat_logprobs(
-                    output.draft_top_logprobs, request.logprobs, request.top_logprobs
+                    output.draft_top_logprobs,
+                    request.logprobs,
+                    request.top_logprobs,
+                    request.include_logprobs_decode_token,
                 )
 
         if request_output.finished:
@@ -412,10 +424,15 @@ class OpenAIServingChat(OpenAiServingBase):
 
         if output.top_logprobs is not None:
             # logprobs
-            choice.logprobs = self._create_chat_logprobs(output.top_logprobs, request.logprobs, request.top_logprobs)
+            choice.logprobs = self._create_chat_logprobs(
+                output.top_logprobs, request.logprobs, request.top_logprobs, request.include_logprobs_decode_token
+            )
             if request.include_draft_logprobs and output.draft_top_logprobs is not None:
                 choice.draft_logprobs = self._create_chat_logprobs(
-                    output.draft_top_logprobs, request.logprobs, request.top_logprobs
+                    output.draft_top_logprobs,
+                    request.logprobs,
+                    request.top_logprobs,
+                    request.include_logprobs_decode_token,
                 )
         return choice
 
