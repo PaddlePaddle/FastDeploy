@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import shlex
 import sys
 import threading
 import types
@@ -708,6 +709,127 @@ class PrefixCacheManagerTest(unittest.TestCase):
             )
 
         self.assertIn("--value_cache_shape 2,3", captured["cmd"])
+
+    def test_launch_cache_manager_quotes_source_values_with_shell_metacharacters(self):
+        """Values interpolated into the shell command must be quoted.
+
+        A value carrying shell metacharacters (spaces, ';', '&&') must reach the
+        launched process as a single, unmodified argument instead of being
+        re-parsed by the shell.
+        """
+        manager = _create_manager(num_cpu_blocks=1)
+        injected_model = "model dir; touch /tmp/pwned-model"
+        injected_protocol = "zmq && touch /tmp/pwned-proto"
+        manager.config.model_config.model = injected_model
+        manager.cache_config.cache_transfer_protocol = injected_protocol
+
+        captured = {}
+
+        class _CmdProcess:
+            def __init__(self, cmd):
+                captured["cmd"] = cmd
+
+            def poll(self):
+                return None
+
+        with (
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
+                side_effect=_DummyIPCSignal,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
+                _DummyEngineCacheQueue,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value="CUDA_VISIBLE_DEVICES=0",
+                create=True,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
+                side_effect=lambda cmd, **_: _CmdProcess(cmd),
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
+                _TrackingThread,
+            ),
+            patch.object(
+                manager,
+                "_get_kv_cache_shape",
+                return_value=([1], [1]),
+            ),
+        ):
+            manager.launch_cache_manager(
+                cache_config=manager.cache_config,
+                tensor_parallel_size=1,
+                device_ids=[0],
+                pod_ip="127.0.0.1",
+                engine_worker_queue_port=8000,
+                ipc_suffix="pid",
+                create_cache_tensor=True,
+            )
+
+        argv = shlex.split(captured["cmd"])
+        self.assertEqual(argv[argv.index("--model_path") + 1], injected_model)
+        self.assertEqual(argv[argv.index("--protocol") + 1], injected_protocol)
+
+    def test_launch_cache_messager_quotes_source_values_with_shell_metacharacters(self):
+        """The cache messager launch command must quote config values as well."""
+        manager = _create_manager()
+        injected_protocol = "zmq && touch /tmp/pwned-proto"
+        manager.cache_config.cache_transfer_protocol = injected_protocol
+
+        captured = {}
+
+        class _CmdProcess:
+            def __init__(self, cmd):
+                captured["cmd"] = cmd
+
+            def poll(self):
+                return None
+
+        def _signal_factory(name=None, array=None, **kwargs):
+            dtype = kwargs.get("dtype", np.array(array).dtype)
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
+            signal.dtype = dtype
+            return signal
+
+        def _fake_sleep(_):
+            manager.cache_ready_signal.value[:] = 1
+
+        with (
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
+                side_effect=_signal_factory,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value="CUDA_VISIBLE_DEVICES=0",
+                create=True,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
+                side_effect=lambda cmd, **_: _CmdProcess(cmd),
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.time.sleep",
+                side_effect=_fake_sleep,
+            ),
+        ):
+            manager.launch_cache_messager(
+                cache_config=manager.cache_config,
+                tensor_parallel_size=1,
+                device_ids=[0],
+                key_cache_shape="1",
+                value_cache_shape="1",
+                pod_ip="127.0.0.1",
+                engine_worker_queue_port=8000,
+                ipc_suffix="pid",
+            )
+
+        argv = shlex.split(captured["cmd"])
+        self.assertEqual(argv[argv.index("--protocol") + 1], injected_protocol)
 
     def test_update_cache_config_adjusts_gpu_pool_based_on_scheduler_flag(self):
         manager = _create_manager()

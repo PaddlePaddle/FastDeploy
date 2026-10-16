@@ -16,6 +16,7 @@
 
 import heapq
 import os
+import shlex
 import subprocess
 import sys
 import threading
@@ -293,9 +294,9 @@ class PrefixCacheManager:
                 val_shape_str = ",".join(map(str, val_cache_shape))
             else:
                 val_shape_str = str(val_cache_shape)
-            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+            val_cache_arg_str = f" --value_cache_shape {shlex.quote(val_shape_str)}"
         if cache_config.kvcache_storage_backend:
-            storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+            storage_arg_str = f" --kvcache_storage_backend {shlex.quote(str(cache_config.kvcache_storage_backend))}"
         else:
             storage_arg_str = " "
 
@@ -307,29 +308,29 @@ class PrefixCacheManager:
                     + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                     + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
                     + f" FD_AS_ONLY_FLUSH={int(envs.FD_AS_ONLY_FLUSH)}"
-                    + f" {sys.executable} {py_path}"
+                    + f" {shlex.quote(sys.executable)} {shlex.quote(py_path)}"
                     + f" --device_id {int(device_ids[i])}"
                     + f" --rank {i}"
-                    + f" --splitwise_role {self.splitwise_role}"
+                    + f" --splitwise_role {shlex.quote(str(self.splitwise_role))}"
                     + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                     + f" --mp_num {tensor_parallel_size}"
-                    + f" --cache_dtype {cache_config.cache_dtype}"
-                    + f" --key_cache_shape {key_cache_shape}"
+                    + f" --cache_dtype {shlex.quote(str(cache_config.cache_dtype))}"
+                    + f" --key_cache_shape {shlex.quote(str(key_cache_shape))}"
                     + val_cache_arg_str
                     + f" --cache_queue_port {cache_config.local_cache_queue_port}"
                     + f" --enable_splitwise {int(self.enable_splitwise)}"
-                    + f" --pod_ip {pod_ip}"
+                    + f" --pod_ip {shlex.quote(str(pod_ip))}"
                     + f" --engine_worker_queue_port {engine_worker_queue_port}"
                     + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                    + f" --protocol {cache_config.cache_transfer_protocol}"
+                    + f" --protocol {shlex.quote(str(cache_config.cache_transfer_protocol))}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
-                    + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                    + f" --default_dtype '{self.config.model_config.dtype}'"
+                    + f" --speculative_config {shlex.quote(self.speculative_config.to_json_string())}"
+                    + f" --default_dtype {shlex.quote(str(self.config.model_config.dtype))}"
                     + storage_arg_str
-                    + f" --write_policy {cache_config.write_policy}"
+                    + f" --write_policy {shlex.quote(str(cache_config.write_policy))}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
-                    + f" --model_path {self.config.model_config.model}"
+                    + f" --model_path {shlex.quote(str(self.config.model_config.model))}"
                     + f" >{log_dir}/cache_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
@@ -400,31 +401,31 @@ class PrefixCacheManager:
                 val_shape_str = ",".join(map(str, value_cache_shape))
             else:
                 val_shape_str = str(value_cache_shape)
-            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+            val_cache_arg_str = f" --value_cache_shape {shlex.quote(val_shape_str)}"
 
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
                 + visible_devices
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
-                + f" {sys.executable} {py_path}"
+                + f" {shlex.quote(sys.executable)} {shlex.quote(py_path)}"
                 + f" --device_id {int(device_ids[i])}"
                 + f" --rank {i}"
-                + f" --splitwise_role {self.splitwise_role}"
+                + f" --splitwise_role {shlex.quote(str(self.splitwise_role))}"
                 + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --mp_num {tensor_parallel_size}"
-                + f" --cache_dtype {cache_config.cache_dtype}"
-                + f" --key_cache_shape {key_cache_shape}"
+                + f" --cache_dtype {shlex.quote(str(cache_config.cache_dtype))}"
+                + f" --key_cache_shape {shlex.quote(str(key_cache_shape))}"
                 + val_cache_arg_str
-                + f" --pod_ip {pod_ip}"
-                + f" --default_dtype '{self.config.model_config.dtype}'"
+                + f" --pod_ip {shlex.quote(str(pod_ip))}"
+                + f" --default_dtype {shlex.quote(str(self.config.model_config.dtype))}"
                 + f" --cache_queue_port {cache_config.local_cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
-                + f" --protocol {cache_config.cache_transfer_protocol}"
+                + f" --protocol {shlex.quote(str(cache_config.cache_transfer_protocol))}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --ipc_suffix {ipc_suffix}"
+                + f" --ipc_suffix {shlex.quote(str(ipc_suffix))}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
-                + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                + f" --speculative_config {shlex.quote(self.speculative_config.to_json_string())}"
                 + f" >{log_dir}/cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
