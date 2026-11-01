@@ -655,6 +655,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
         "metax_ops/cache_kv_with_rope.cu",
+        "metax_ops/apply_rope_qkv.cu",
         "metax_ops/cpp_extensions.cc",
         "metax_ops/split_merge_qkv.cu",
     ]

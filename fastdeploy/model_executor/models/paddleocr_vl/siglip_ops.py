@@ -14,15 +14,49 @@
 # limitations under the License.
 """
 
+import os
 from typing import List
 
 import paddle
 from paddleformers.transformers.activations import ACT2FN
 
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import llm_logger as logger
 
-if current_platform.is_cuda():
+_MACA_FUSED_ROPE_OK = False
+_IS_CUDA = current_platform.is_cuda()
+_IS_MACA = current_platform.is_maca()
+
+if _IS_CUDA:
     from fastdeploy.model_executor.ops.gpu import fused_neox_rope_embedding, gelu_tanh
+elif _IS_MACA:
+    # Metax C500 (SM 80) has gelu_tanh fused op available, but not fused_neox_rope_embedding.
+    # Enable gelu_tanh to avoid Python fallback in SigLIP MLP (27 layers × 1 GELU each).
+    from fastdeploy.model_executor.ops.gpu import gelu_tanh
+
+    try:
+        from fastdeploy.model_executor.ops.gpu import apply_rope_qkv as _maca_apply_rope_qkv
+
+        _MACA_FUSED_ROPE_OK = True
+    except ImportError:
+        # Support the standalone build for installations with older custom ops.
+        _ROPE_SO = os.path.join(os.path.dirname(__file__), "apply_rope_qkv_pd_.so")
+        if os.path.exists(_ROPE_SO):
+            try:
+                paddle.utils.cpp_extension.load_op_meta_info_and_register_op(_ROPE_SO)
+
+                def _standalone_apply_rope_qkv(*args):
+                    return paddle._C_ops._run_custom_op("apply_rope_qkv", *args)
+
+                _maca_apply_rope_qkv = _standalone_apply_rope_qkv
+                _MACA_FUSED_ROPE_OK = True
+            except Exception as exc:
+                logger.warning(f"Failed to load Metax fused SigLIP RoPE: {exc}")
+        if not _MACA_FUSED_ROPE_OK:
+            logger.warning(
+                "Metax fused SigLIP RoPE is unavailable; using native RoPE. "
+                "Rebuild the Metax custom ops or run bash scripts/build_rope_kernel.sh."
+            )
 
 
 def rotate_half(x):
@@ -59,6 +93,27 @@ def native_neox_rope_embedding(qkv, cos, sin, num_heads):
     return q, k, v
 
 
+def maca_fused_neox_rope_embedding(qkv, cos, sin, num_heads, head_dim):
+    """Metax fused RoPE kernel — rotate-half convention.
+    Input: qkv [B, seq, 3*num_heads*head_dim], cos/sin [seq, 1, head_dim]
+    Output: q, k, v each [seq, num_heads, head_dim]
+    """
+    if head_dim % 8 != 0 or not paddle.in_dynamic_mode():
+        return native_neox_rope_embedding(qkv, cos, sin, num_heads)
+
+    # Flatten batch+seq → tokens (kernel expects 2D qkv)
+    qkv_flat = qkv.reshape([-1, 3 * num_heads * head_dim])
+    q_out, k_out, v_out = _maca_apply_rope_qkv(
+        qkv_flat,
+        cos,
+        sin,
+        num_heads,
+        num_heads,
+        head_dim,
+    )
+    return q_out, k_out, v_out
+
+
 jit_unified_marker = paddle.jit.marker.unified if hasattr(paddle.jit.marker, "unified") else lambda fn: fn
 
 
@@ -66,8 +121,10 @@ jit_unified_marker = paddle.jit.marker.unified if hasattr(paddle.jit.marker, "un
 def neox_rope_embedding(
     qkv: paddle.Tensor, cos_emb: paddle.Tensor, sin_emb: paddle.Tensor, num_heads: int, head_dim: int
 ) -> List[paddle.Tensor]:
-    if current_platform.is_cuda() and paddle.in_dynamic_mode():
+    if _IS_CUDA and paddle.in_dynamic_mode():
         return fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
+    elif _IS_MACA and _MACA_FUSED_ROPE_OK and paddle.in_dynamic_mode() and head_dim % 8 == 0:
+        return maca_fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
     else:
         return native_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads)
 
@@ -75,7 +132,7 @@ def neox_rope_embedding(
 @jit_unified_marker
 def get_activation_fn(hidden_act: str):
     if hidden_act == "gelu_pytorch_tanh":
-        if current_platform.is_cuda() and paddle.in_dynamic_mode():
+        if (_IS_CUDA or _IS_MACA) and paddle.in_dynamic_mode():
             return gelu_tanh
         else:
             return ACT2FN["gelu_new"]
